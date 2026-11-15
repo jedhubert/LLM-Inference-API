@@ -8,7 +8,6 @@
     $action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument '-File "C:\path\to\healthcheck_cron.ps1"'
     $trigger = New-ScheduledTaskTrigger -Once -At (Get-Date) -RepetitionInterval (New-TimeSpan -Minutes 5)
     Register-ScheduledTask -Action $action -Trigger $trigger -TaskName "LLM_Health_Monitor"
-#>
 
 $HealthUrl = if ($env:HEALTH_URL) { $env:HEALTH_URL } else { "http://localhost:8000/health" }
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -23,7 +22,6 @@ $Timestamp = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
 
 try {
     $response = Invoke-RestMethod -Uri $HealthUrl -Method Get -TimeoutSec 5 -ErrorAction Stop
-    # HTTP 200 covers both "healthy" and "degraded"; "unhealthy"/"initializing" return 503 and land in catch
     if ($response.status -eq "degraded") {
         $logMessage = "[$Timestamp] [WARNING] Service degraded (Redis cache unreachable): $($response | ConvertTo-Json -Compress)"
         Add-Content -Path $LogFile -Value $logMessage

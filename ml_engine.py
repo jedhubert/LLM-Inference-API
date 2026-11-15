@@ -6,12 +6,9 @@ class LLMEngine:
     def __init__(self):
         self.pipe = None
         self.model_id = os.getenv("MODEL_ID", "TinyLlama/TinyLlama-1.1B-Chat-v1.0")
-        # "auto" = bfloat16 on GPU, float32 on CPU. Set "bfloat16" to halve CPU memory use.
         self.model_dtype = os.getenv("MODEL_DTYPE", "auto").lower()
         self.is_loading = False
         self.load_error = None
-        # A single pipeline is not safe to drive from several threads at once, and
-        # concurrent CPU inference only makes every request slower. Serialize access.
         self._inference_lock = threading.Lock()
 
     def is_ready(self) -> bool:
@@ -25,7 +22,6 @@ class LLMEngine:
             self.load_error = None
             print(f"[INFO] Loading model '{self.model_id}' in background thread...")
 
-            # Lazy import to keep Uvicorn boot instantaneous
             import torch
             from transformers import pipeline
 
@@ -64,20 +60,17 @@ class LLMEngine:
             else:
                 raise RuntimeError("Model is not loaded!")
 
-        # Create a chat-like format for TinyLlama
         messages = [
             {"role": "system", "content": "You are a helpful AI assistant."},
             {"role": "user", "content": prompt},
         ]
 
-        # Apply the chat template
         prompt_formatted = self.pipe.tokenizer.apply_chat_template(
             messages,
             tokenize=False,
             add_generation_prompt=True
         )
 
-        # Sampling with temperature 0 is rejected by transformers; treat it as greedy decoding.
         if temperature > 0:
             sampling_kwargs = {"do_sample": True, "temperature": temperature, "top_k": 50, "top_p": 0.95}
         else:
@@ -95,5 +88,4 @@ class LLMEngine:
         token_count = len(self.pipe.tokenizer.encode(generated_text, add_special_tokens=False))
         return generated_text, token_count
 
-# Create a global instance
 llm_engine = LLMEngine()
