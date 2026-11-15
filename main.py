@@ -16,16 +16,12 @@ except ImportError:
 from ml_engine import llm_engine
 from schemas import GenerationRequest, GenerationResponse, HealthCheckResponse
 
-# Configuration from Environment Variables
 REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
 REDIS_PORT = int(os.getenv("REDIS_PORT", "6379"))
 REDIS_PASSWORD = os.getenv("REDIS_PASSWORD") or None
 REDIS_DB = int(os.getenv("REDIS_DB", "0"))
 CACHE_TTL_SECONDS = int(os.getenv("CACHE_TTL_SECONDS", "3600"))
-# Minimum delay between reconnection attempts while Redis is unreachable, so that a
-# Redis outage does not add a connect timeout to every single request.
 REDIS_RETRY_SECONDS = float(os.getenv("REDIS_RETRY_SECONDS", "15"))
-# When set, /generate and DELETE /cache require a matching X-API-Key header.
 API_KEY = os.getenv("API_KEY") or None
 
 redis_client: Optional[Any] = None
@@ -83,7 +79,6 @@ async def lifespan(app: FastAPI):
     print("[INFO] Initializing Production LLM Inference Service...")
     if API_KEY is None:
         print("[WARNING] API_KEY is not set; /generate and DELETE /cache are open to anyone who can reach this port.")
-    # Trigger non-blocking async background model load
     llm_engine.load_model_async()
     yield
     print("[INFO] Shutting down LLM Inference Service...")
@@ -129,17 +124,15 @@ def health_check(response: Response):
         print(f"[WARNING] Redis health ping failed: {e}")
         reset_redis_client()
 
-    # Determine overall status
     if model_ready and redis_conn:
         overall_status = "healthy"
     elif model_ready and not redis_conn:
-        overall_status = "degraded" # LLM can serve inference, caching bypassed
+        overall_status = "degraded"
     elif llm_engine.is_loading:
         overall_status = "initializing"
     else:
         overall_status = "unhealthy"
 
-    # Set HTTP 503 if not fully ready or unhealthy
     if overall_status in ("unhealthy", "initializing"):
         response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
 
@@ -185,7 +178,6 @@ def generate_text(request: GenerationRequest):
     cache_key = compute_cache_key(llm_engine.model_id, request.prompt, request.max_tokens, request.temperature)
     client = get_redis_client() if cacheable else None
 
-    # 1. Check Redis Cache
     if client:
         try:
             cached_data = client.get(cache_key)
@@ -203,7 +195,6 @@ def generate_text(request: GenerationRequest):
             reset_redis_client()
             client = None
 
-    # 2. Cache Miss: Run Model Inference
     try:
         result, token_usage = llm_engine.generate(
             prompt=request.prompt,
@@ -214,7 +205,6 @@ def generate_text(request: GenerationRequest):
         print(f"[ERROR] Inference failed: {e}")
         raise HTTPException(status_code=500, detail="Inference error. Check the server logs for details.")
 
-    # 3. Store result in Redis cache
     if client:
         try:
             payload = json.dumps({"result": result, "token_usage": token_usage})
@@ -238,7 +228,6 @@ def flush_cache():
     if not client:
         raise HTTPException(status_code=503, detail="Redis service unavailable")
     try:
-        # SCAN in batches instead of KEYS, which blocks Redis while it walks the whole keyspace.
         deleted_count = 0
         batch = []
         for key in client.scan_iter(match="llm_cache:*", count=500):

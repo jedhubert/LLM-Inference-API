@@ -3,13 +3,11 @@
     Production LLM API Deployment & Health Verification Script for Windows PowerShell
 .DESCRIPTION
     Pulls latest git commits, rebuilds Docker images, starts multi-container stack, and probes /health.
-#>
 
 $ErrorActionPreference = "Stop"
 
 $Port = if ($env:PORT) { $env:PORT } else { "8000" }
 $HealthUrl = "http://localhost:$Port/health"
-# 100 x 3s = 5 minutes: the first deployment downloads ~2.2 GB of model weights.
 $MaxAttempts = if ($env:MAX_ATTEMPTS) { [int]$env:MAX_ATTEMPTS } else { 100 }
 $SleepIntervalSec = if ($env:SLEEP_INTERVAL) { [int]$env:SLEEP_INTERVAL } else { 3 }
 
@@ -17,7 +15,6 @@ Write-Host "======================================================" -ForegroundC
 Write-Host "🚀 Starting Production Deployment: LLM Inference API  " -ForegroundColor Cyan
 Write-Host "======================================================" -ForegroundColor Cyan
 
-# Step 1: Check Git Repo
 Write-Host "`n▶ Step 1: Checking for repository updates..." -ForegroundColor Yellow
 if ((Get-Command git -ErrorAction SilentlyContinue) -and (Test-Path ".git")) {
     Write-Host "Pulling latest code changes..."
@@ -26,15 +23,12 @@ if ((Get-Command git -ErrorAction SilentlyContinue) -and (Test-Path ".git")) {
     Write-Host "Git repository not present or git CLI not found. Using local directory code."
 }
 
-# Step 2: Build Docker Compose
 Write-Host "`n▶ Step 2: Building container images..." -ForegroundColor Yellow
 docker compose build --pull
 
-# Step 3: Up in detached mode
 Write-Host "`n▶ Step 3: Orchestrating multi-container startup..." -ForegroundColor Yellow
 docker compose up -d --remove-orphans
 
-# Step 4: Health Check Probe Loop
 Write-Host "`n▶ Step 4: Polling /health endpoint for readiness ($HealthUrl)..." -ForegroundColor Yellow
 $healthy = $false
 

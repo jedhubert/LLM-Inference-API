@@ -1,14 +1,8 @@
 services:
-  # -------------------------------------------------------------
-  # Redis Container: High-speed caching for LLM inference results
-  # -------------------------------------------------------------
   redis:
     image: redis:7.2-alpine
     container_name: llm_redis_cache
     command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
-    # No host port mapping: the API reaches Redis over llm_network, and an unauthenticated
-    # Redis should not be reachable from outside Docker. For local debugging use:
-    #   docker compose exec redis redis-cli
     volumes:
       - redis_data:/data
     healthcheck:
@@ -21,9 +15,6 @@ services:
     networks:
       - llm_network
 
-  # -------------------------------------------------------------
-  # FastAPI Container: Production LLM inference endpoint
-  # -------------------------------------------------------------
   api:
     build:
       context: .
@@ -37,10 +28,8 @@ services:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - MODEL_ID=TinyLlama/TinyLlama-1.1B-Chat-v1.0
-      # auto = float32 on CPU (~4.4 GB RAM); bfloat16 halves that for low-memory machines
       - MODEL_DTYPE=${MODEL_DTYPE:-auto}
       - CACHE_TTL_SECONDS=3600
-      # Set API_KEY in a .env file next to this compose file to require an X-API-Key header.
       - API_KEY=${API_KEY:-}
     depends_on:
       redis:
@@ -52,7 +41,6 @@ services:
       interval: 10s
       timeout: 5s
       retries: 6
-      # The first boot downloads ~2.2 GB of model weights before /health reports ready.
       start_period: 300s
     restart: unless-stopped
     networks:
