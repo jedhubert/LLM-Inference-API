@@ -23,7 +23,6 @@ $Timestamp = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
 
 try {
     $response = Invoke-RestMethod -Uri $HealthUrl -Method Get -TimeoutSec 5 -ErrorAction Stop
-    # HTTP 200 covers both "healthy" and "degraded"; "unhealthy"/"initializing" return 503 and land in catch
     if ($response.status -eq "degraded") {
         $logMessage = "[$Timestamp] [WARNING] Service degraded (Redis cache unreachable): $($response | ConvertTo-Json -Compress)"
         Add-Content -Path $LogFile -Value $logMessage
